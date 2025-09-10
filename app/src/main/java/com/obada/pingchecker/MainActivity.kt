@@ -15,6 +15,11 @@ import com.obada.pingchecker.ui.theme.PingCheckerTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
 
 enum class Screen {Main, Second}
 var screen by mutableStateOf(Screen.Main)
@@ -23,10 +28,14 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            PingCheckerTheme {
-                when(screen) {
-                    Screen.Main -> MainScreen ()
-                    Screen.Second -> SecondScreen ()
+            Column {
+                PingCheckerTheme {
+                    when (screen) {
+                        Screen.Main -> MainScreen()
+                        Screen.Second -> SecondScreen()
+                    }
+                    SwitchScreen()
+                    Text("Screen: $screen")
                 }
             }
         }
@@ -51,10 +60,9 @@ fun Clicker() {
 @Composable
 fun SwitchScreen() {
     fun switch(){
-
-        if(screen == Screen.Main)
-            screen = Screen.Second
-        else screen = Screen.Main
+        screen = if(screen == Screen.Main)
+            Screen.Second
+        else Screen.Main
     }
 
     Column {
@@ -68,14 +76,41 @@ fun MainScreen() {
     Column {
         Greeting("Obada")
         Clicker()
-        SwitchScreen()
-        Text("Screen: $screen")
     }
 }
 @Composable
 fun SecondScreen() {
     Column{
-        SwitchScreen()
-        Text("Screen: $screen")
+        PingButton()
+    }
+}
+
+suspend fun checkHttpOnce(host: String): String = withContext(Dispatchers.IO) {
+    val client = OkHttpClient()
+    val request = Request.Builder()
+        .url(if (host.startsWith("http")) host else "https://$host")
+        .head()
+        .build()
+
+    val result = try {
+        client.newCall(request).execute().use { resp ->
+            if (resp.isSuccessful) "Online ✅" else "Offline ❌"
+        }
+    } catch (_: Exception) {
+        "Offline ❌"
+    }
+    result
+}
+
+@Composable
+fun PingButton() {
+    var status by remember { mutableStateOf("Unknown") }
+    val scope = rememberCoroutineScope()
+
+    Column {
+        Text("Result: $status")
+        Button(onClick = { scope.launch { status = checkHttpOnce("google.com") } }) {
+            Text("Check Google")
+        }
     }
 }
