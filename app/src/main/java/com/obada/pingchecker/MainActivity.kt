@@ -3,13 +3,20 @@ package com.obada.pingchecker
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.obada.pingchecker.ui.theme.PingCheckerTheme
 import kotlinx.coroutines.Dispatchers
@@ -20,17 +27,21 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
+
 data class Site(
     val name: String,
     val url: String,
+    val iconRes: Int? = null,
 )
 
 val sites = listOf(
-    Site("Google", "google.com"),
+    Site("Google", "google.com", R.drawable.ic_google),
     Site("GitHub", "github.com"),
-    Site("Stack Overflow", "stackoverflow.com"),
-    Site("YouTube", "youtube.com"),
-    Site("Should be offline", "example.invalid") // guaranteed offline/DNS error
+    Site("Facebook", "facebook.com"),
+    Site("YouTube", "youtube.com", R.drawable.ic_youtube),
+    Site("Amazon", "aws.amazon.com"),
+    Site("Outlook", "outlook.com"),
+    Site("Offline Check","Offline.Sample"),
 )
 
 private val http = OkHttpClient.Builder()
@@ -42,12 +53,9 @@ private fun normalizeUrl(hostOrUrl: String): String =
 
 suspend fun checkHttpOnce(hostOrUrl: String): String = withContext(Dispatchers.IO) {
     val url = normalizeUrl(hostOrUrl)
-
     fun requestHead() = Request.Builder().url(url).head().build()
     fun requestGet()  = Request.Builder().url(url).get().build()
-
     try {
-        // Try HEAD first (fast), then GET fallback (some sites block HEAD)
         http.newCall(requestHead()).execute().use { resp ->
             if (resp.isSuccessful || (resp.code in 300..399)) return@withContext "Online ✅"
         }
@@ -64,95 +72,117 @@ suspend fun checkHttpOnce(hostOrUrl: String): String = withContext(Dispatchers.I
     }
 }
 
-// ---- UI ---------------------------------------------------------------------
-
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             PingCheckerTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    SitesScreen()
-                }
+                SitesScreen()
             }
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SitesScreen() {
     val scope = rememberCoroutineScope()
-
-    // Map URL -> status string. Keeps Compose state OUT of your data model.
     val statusMap = remember { mutableStateMapOf<String, String>() }
 
-    // Initialize unknowns once
     LaunchedEffect(Unit) {
         sites.forEach { statusMap[normalizeUrl(it.url)] = "Unknown" }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Website status", style = MaterialTheme.typography.titleLarge)
-            Spacer(Modifier.weight(1f))
-            Button(
+    Scaffold(
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = { Text("Website status") },
+            )
+        },
+        floatingActionButton = {
+            ExtendedFloatingActionButton(
                 onClick = {
                     scope.launch {
                         val jobs = sites.map { site ->
                             val url = normalizeUrl(site.url)
                             async {
                                 statusMap[url] = "Checking…"
-                                val result = checkHttpOnce(url)
-                                statusMap[url] = result
+                                statusMap[url] = checkHttpOnce(url)
                             }
                         }
                         jobs.awaitAll()
                     }
-                }
-            ) { Text("Check all") }
+                },
+                text = { Text("Check all") },
+                icon = { Icon(Icons.Default.Refresh, null) }
+            )
         }
-
-        Spacer(Modifier.height(12.dp))
-
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    ) { inner ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(inner)
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .navigationBarsPadding(),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
             items(sites, key = { it.url }) { site ->
                 val url = normalizeUrl(site.url)
                 val status = statusMap[url] ?: "Unknown"
-
-                Card {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(site.name, style = MaterialTheme.typography.titleMedium)
-                            Spacer(Modifier.height(2.dp))
-                            Text(url)
-                            Spacer(Modifier.height(6.dp))
-                            Text("Status: $status")
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        val rowScope = rememberCoroutineScope()
-                        Button(
-                            onClick = {
-                                rowScope.launch {
-                                    statusMap[url] = "Checking…"
-                                    statusMap[url] = checkHttpOnce(url)
-                                }
-                            }
-                        ) { Text("Check") }
-                    }
-                }
+                SiteRow(
+                    name = site.name,
+                    url = url,
+                    status = status,
+                    iconRes = site.iconRes
+                )
             }
         }
     }
+}
+@Composable
+fun SiteRow(name: String, url: String, status: String, iconRes: Int?) {
+    Card {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            StatusDot(status = status)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(2.dp))
+                Text(url, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(6.dp))
+                Text("Status: $status", style = MaterialTheme.typography.bodyMedium)
+            }
+            Spacer(Modifier.width(12.dp))
+            if (iconRes != null) {
+                Icon(
+                    painter = painterResource(iconRes),
+                    contentDescription = "$name icon",
+                    tint = Color.Unspecified,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+
+        }
+    }
+}
+
+@Composable
+fun StatusDot(status: String) {
+    val c = when {
+        status.startsWith("Online") -> Color(0xFF2ECC71)
+        status.startsWith("Checking") -> MaterialTheme.colorScheme.primary
+        status == "Unknown" -> Color(0xFF95A5A6)
+        else -> Color(0xFFE74C3C)
+    }
+    Box(
+        modifier = Modifier
+            .size(14.dp)
+            .clip(MaterialTheme.shapes.small)
+            .background(c)
+    )
 }
