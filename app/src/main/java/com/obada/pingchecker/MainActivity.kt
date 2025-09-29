@@ -36,12 +36,13 @@ data class Site(
 
 val sites = listOf(
     Site("Google", "google.com", R.drawable.ic_google),
-    Site("GitHub", "github.com"),
-    Site("Facebook", "facebook.com"),
+    Site("GitHub", "github.com", R.drawable.ic_github),
+    Site("Facebook", "facebook.com", R.drawable.ic_facebook),
     Site("YouTube", "youtube.com", R.drawable.ic_youtube),
-    Site("Amazon", "aws.amazon.com"),
-    Site("Outlook", "outlook.com"),
-    Site("Offline Check","Offline.Sample"),
+    Site("Twitter (X)", "x.com", R.drawable.ic_twitter),
+    Site("Outlook", "outlook.com", R.drawable.ic_outlook),
+    Site("Slack","slack.com", R.drawable.ic_slack),
+    Site("Amazon","amazon.com", R.drawable.ic_amazon)
 )
 
 private val http = OkHttpClient.Builder()
@@ -114,7 +115,9 @@ fun SitesScreen() {
                     }
                 },
                 text = { Text("Check all") },
-                icon = { Icon(Icons.Default.Refresh, null) }
+                icon = { Icon(Icons.Default.Refresh, null) },
+                modifier = Modifier
+                    .padding(bottom = 70.dp, end = 16.dp) // ⬅ move it up from nav bar / content
             )
         }
     ) { inner ->
@@ -138,6 +141,7 @@ fun SitesScreen() {
             }
         }
     }
+
 }
 @Composable
 fun SiteRow(name: String, url: String, status: String, iconRes: Int?) {
@@ -163,7 +167,7 @@ fun SiteRow(name: String, url: String, status: String, iconRes: Int?) {
                     painter = painterResource(iconRes),
                     contentDescription = "$name icon",
                     tint = Color.Unspecified,
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(52.dp)
                 )
             }
 
