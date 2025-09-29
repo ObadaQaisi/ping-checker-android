@@ -64,9 +64,9 @@ suspend fun checkHttpOnce(hostOrUrl: String): String = withContext(Dispatchers.I
             return@withContext if (resp.isSuccessful || (resp.code in 300..399)) "Online ✅"
             else "Offline ❌ (HTTP ${resp.code})"
         }
-    } catch (e: java.net.UnknownHostException) {
+    } catch (_: java.net.UnknownHostException) {
         "Offline ❌ (DNS error)"
-    } catch (e: java.net.SocketTimeoutException) {
+    } catch (_: java.net.SocketTimeoutException) {
         "Offline ❌ (Timeout)"
     } catch (_: Exception) {
         "Offline ❌"
